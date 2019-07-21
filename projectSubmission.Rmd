@@ -1,0 +1,82 @@
+---
+title: 'Project Report: Practical Machine Learning'
+author: "Chinmay Sharma"
+
+output:
+  html_document: 
+    fig_caption: yes
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Introduction
+Personal health devices like *Jawbone Up, Nike FuelBand* and *Fitbit* are a great source of data for personal activity. These devices give their users a detailed understanding of their health as a result of their daily activity and by setting up goals, it also motivates them on certain exercises to boost their health.The report below analyses similar data obtained from here, by correlating parameters such as roll, pitch and yaw of arm,belt and dumbbell to predict how (well) is the activity performed. This is indicated in the dataset through the variable 'classe'.
+
+##Getting and Cleaning Data
+The data can be downloaded from the following links
+
+training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+test data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data can now be read into R
+```{r cache=TRUE}
+library(caret)
+library(dplyr)
+trainData<-read.csv("pml-training.csv")
+testData<-read.csv("pml-testing.csv")
+dim(trainData)
+```
+ 
+There are a lot of columns(ie., predictors) in the training dataset. This includes variables such as yaw, roll, pitch, acceleration and gyro acceleration in x,y and z directions for the device, arm, forearm and the dumbbell, which was used in all the excercises. Only the columns with finite values are filtered to be used as predictors.
+
+```{r cache=TRUE}
+filteredData<-select(trainData,roll_belt,pitch_belt,yaw_belt,gyros_belt_x,gyros_belt_y,gyros_belt_z,accel_belt_x,accel_belt_y,accel_belt_z,magnet_belt_x,magnet_belt_y,magnet_belt_z,roll_arm,pitch_arm,yaw_arm,gyros_arm_x,gyros_arm_y,gyros_arm_z,accel_arm_x,accel_arm_y,accel_arm_z,magnet_arm_x,magnet_arm_y,magnet_arm_z,roll_dumbbell,pitch_dumbbell,yaw_dumbbell,gyros_dumbbell_x,gyros_dumbbell_y,gyros_dumbbell_z,accel_dumbbell_x,accel_dumbbell_y,accel_dumbbell_z,magnet_dumbbell_x,magnet_dumbbell_y,magnet_dumbbell_z,roll_forearm,pitch_forearm,yaw_forearm,gyros_forearm_x,gyros_forearm_y,gyros_forearm_z,accel_forearm_x,accel_forearm_y,accel_forearm_z,magnet_forearm_x,magnet_forearm_y,magnet_forearm_z,classe)
+```
+
+Further, the data has been scaled and centered so that predictors with different units are on the same scale.
+
+```{r cache=TRUE}
+PpObject<-preProcess(filteredData[,-49],method=c("center","scale"))
+NewSub<-predict(PpObject,filteredData[-49])
+NewSub<-mutate(NewSub,classe=filteredData$classe)
+```
+##Visualization
+Below, two featureplots are shown:
+- one with yaw, pitch and roll data of the belt
+- another with roll values of belt,arm,dumbell and forearm
+
+```{r cache=TRUE}
+featurePlot(x=NewSub[,c("roll_belt","pitch_belt","yaw_belt","classe")],y=NewSub$classe,plot="pairs")
+featurePlot(x=NewSub[,c("roll_belt","roll_arm","roll_dumbbell","roll_forearm","classe")],y=NewSub$classe,plot="pairs")
+```
+
+Looking at the graph, we see little correlation between any of the plotted variables,except that of roll_belt with each of roll_arm, roll_dumbbell, roll_forearm. Therefore, all the selected variables can be used as predictors for the predicting outcome.
+
+##Training Dataset: The methods of Decision Trees,linear discriminant analysis, randomforests and boosting
+
+In the next steps, the data is trained to fit the outcome classe to the rest of the variables in NewSub. Four methods are used:Decision Trees(method="rpart"), randomforests(method="rf"),linear discriminant analysis(method="lda") and  boosting(method="gbm").
+```{r cache=TRUE,echo=TRUE, results='hide'}
+set.seed(1234)
+modelfitrpart<-train(classe~.,method="rpart",data=NewSub)
+modelfitrf<-train(classe~.,method="rf",data=NewSub)
+modelfitlda<-train(classe~.,method="lda",data=NewSub)
+modelfitgbm<-train(classe~.,method="gbm",data=NewSub)
+```
+
+The training accuracy of each can be checked. 
+```{r cache=TRUE}
+modelfitrpart$results
+modelfitrf$results
+modelfitlda$results
+modelfitgbm$results
+```
+It is clear that boosting method has the highest accuracy after RandomForest, which has an accuracy close to 1, indicating overfitting.Therefore, boosting is the preferred method for prediction.
+
+```{r}
+predictclasse<-predict(modelfitgbm,newdata=testData)
+predictclasse
+```
